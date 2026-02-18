@@ -27,7 +27,8 @@ export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const { login, isLoading, error: serverError } = useAuthStore()
+
+  const { login, skipLogin, isLoading, error } = useAuthStore()
   const navigate = useNavigate()
 
   const {
@@ -44,8 +45,9 @@ export function LoginForm({
 
   const onSubmit = async (data: LoginFormData) => {
     try {
-      await login(data)
-      navigate("/dashboard")
+      await login({ email, password })
+      navigate("/workspaces")
+
     } catch (err) {
       console.log(err)
     }
@@ -105,6 +107,16 @@ export function LoginForm({
                 <Button variant="outline" type="button" disabled className="w-full">
                   <Github />
                   <span>Login with Github</span>
+                </Button>
+                <Button
+                  variant="secondary"
+                  type="button"
+                  onClick={() => {
+                    skipLogin();
+                    navigate("/workspaces");
+                  }}
+                >
+                  Skip Login (Dev)
                 </Button>
                 <FieldDescription className="text-center">
                   Don&apos;t have an account? <Link to="/signup" className="underline">Sign up</Link>

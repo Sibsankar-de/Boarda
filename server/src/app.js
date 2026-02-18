@@ -36,11 +36,13 @@ app.use(cookieParser());
 // routes import
 import healthRouter from './routes/health.routes.js';
 import userRouter from './routes/user.routes.js';
+import workspaceRouter from './routes/workspace.routes.js';
 
 
 // routes declaration
 app.use("/api/v1", healthRouter);
 app.use("/api/v1/users", userRouter);
+app.use("/api/v1/workspaces", workspaceRouter);
 
 app.use(errorMiddleware);
 
