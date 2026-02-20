@@ -29,8 +29,6 @@ export default function WorkspaceView() {
     "updatedDesc" | "updatedAsc" | "nameAsc"
   >("updatedDesc");
 
-  const { user } = useAuthStore();
-
   const fetchWorkspaceAndBoards = async () => {
     if (!workspaceId) return;
 
@@ -46,37 +44,6 @@ export default function WorkspaceView() {
       setBoards(boardsRes.data.boards || []);
     } catch (error) {
       console.error("Failed to fetch data:", error);
-      // Fallback mock data for dev user if API fails
-      if (user?.id === "dev-user-id") {
-        setBoards([
-          {
-            _id: "1",
-            name: "API Development",
-            updatedAt: new Date().toISOString(),
-            members: [
-              {
-                userId: { _id: "u1", fullName: "User 1", username: "u1" },
-                role: "write",
-              },
-              {
-                userId: { _id: "u2", fullName: "User 2", username: "u2" },
-                role: "read",
-              },
-            ],
-          },
-          {
-            _id: "2",
-            name: "UI Refactor",
-            updatedAt: new Date(Date.now() - 86400000).toISOString(),
-            members: [
-              {
-                userId: { _id: "u1", fullName: "User 1", username: "u1" },
-                role: "write",
-              },
-            ],
-          },
-        ]);
-      }
     } finally {
       setIsLoading(false);
     }

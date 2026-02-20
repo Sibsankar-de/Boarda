@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { Card } from "./ui/card";
 import { MoreHorizontal, Trash2, Edit2 } from "lucide-react";
 import { deleteBoard } from "../lib/api";
-import { EditBoardModal } from './EditBoardModal';
+import { EditBoardModal } from "./EditBoardModal";
+import { useAuthStore } from "../store/auth-store";
 
 interface Member {
   userId: {
@@ -21,6 +22,8 @@ export interface BoardProps {
   updatedAt: string;
   members: Member[];
   colorCode?: string; // Optional color for the top bar
+  createdBy?: string | { _id: string };
+  userRole?: string;
 }
 
 const defaultColors = [
@@ -102,7 +105,7 @@ export function BoardCard({
       console.error("Failed to delete board:", error);
       alert(
         error.response?.data?.message ||
-        "Failed to delete board. Only creator can delete it.",
+          "Failed to delete board. Only creator can delete it.",
       );
     } finally {
       setIsDeleting(false);
@@ -110,15 +113,22 @@ export function BoardCard({
     }
   };
 
+  const hasWriteAccess =
+    board.userRole === "write" || board.userRole === "owner";
+
   if (viewMode === "list") {
     return (
       <>
         <Card className="hover:shadow-md transition-shadow relative flex flex-row items-center justify-between p-4 px-6 h-20 shadow-sm border-gray-200 rounded-xl bg-white group">
           <div className="flex items-center gap-4 w-1/3">
-            <div className={`w - 1.5 h - 10 ${topColor} rounded - full`}></div>
+            <div className={`w-1.5 h-10 ${topColor} rounded-full`}></div>
             <div>
-              <h3 className="font-semibold text-base truncate text-left">{board.name}</h3>
-              <p className="text-xs text-gray-400 text-left">Updated {updatedAtText}</p>
+              <h3 className="font-semibold text-base truncate text-left">
+                {board.name}
+              </h3>
+              <p className="text-xs text-gray-400 text-left">
+                Updated {updatedAtText}
+              </p>
             </div>
           </div>
 
@@ -155,46 +165,48 @@ export function BoardCard({
               )}
             </div>
 
-            <div className="relative" ref={menuRef}>
-              <button
-                className="text-gray-300 hover:text-gray-600 p-1.5 rounded-md hover:bg-gray-100 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 outline-none"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsMenuOpen(!isMenuOpen);
-                }}
-              >
-                <MoreHorizontal className="w-4 h-4" />
-              </button>
+            {hasWriteAccess && (
+              <div className="relative" ref={menuRef}>
+                <button
+                  className="text-gray-300 hover:text-gray-600 hover:bg-gray-100 cursor-pointer p-1.5 rounded-md transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 outline-none"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsMenuOpen(!isMenuOpen);
+                  }}
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                </button>
 
-              {isMenuOpen && (
-                <div className="absolute right-0 mt-2 w-32 bg-white rounded-md shadow-lg border border-gray-200 z-50 py-1">
-                  <button
-                    className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setIsMenuOpen(false);
-                      setIsEditModalOpen(true);
-                    }}
-                  >
-                    <Edit2 className="w-3.5 h-3.5" /> Edit
-                  </button>
-                  <button
-                    className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleDelete();
-                    }}
-                    disabled={isDeleting}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />{" "}
-                    {isDeleting ? "Deleting..." : "Delete"}
-                  </button>
-                </div>
-              )}
-            </div>
+                {isMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-32 bg-white rounded-md shadow-lg border border-gray-200 z-50 py-1">
+                    <button
+                      className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsMenuOpen(false);
+                        setIsEditModalOpen(true);
+                      }}
+                    >
+                      <Edit2 className="w-3.5 h-3.5" /> Edit
+                    </button>
+                    <button
+                      className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDelete();
+                      }}
+                      disabled={isDeleting}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />{" "}
+                      {isDeleting ? "Deleting..." : "Delete"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </Card>
         <EditBoardModal
@@ -212,7 +224,7 @@ export function BoardCard({
 
   return (
     <>
-      <Card className="p-6 gap-0 hover:shadow-lg transition-all relative h-[180px] flex flex-col justify-between border-gray-200/80 shadow-sm rounded-xl bg-white group">
+      <Card className="p-6 gap-0 hover:shadow-lg transition-all relative h-45 flex flex-col justify-between border-gray-200/80 shadow-sm rounded-xl bg-white group">
         <div className={`w-8 h-1 shrink-0 ${topColor} rounded-full mb-4`}></div>
 
         <div className="flex justify-between items-start mb-2">
@@ -258,46 +270,52 @@ export function BoardCard({
             )}
           </div>
 
-          <div className="relative" ref={menuRef}>
-            <button
-              className="text-gray-300 hover:text-gray-600 p-1.5 rounded-md hover:bg-gray-100 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 outline-none"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsMenuOpen(!isMenuOpen);
-              }}
-            >
-              <MoreHorizontal className="w-5 h-5" />
-            </button>
+          {hasWriteAccess ? (
+            <div className="relative" ref={menuRef}>
+              <button
+                className={`text-gray-300 ${hasWriteAccess ? "hover:text-gray-600 hover:bg-gray-100 cursor-pointer" : "cursor-not-allowed opacity-50"} p-1.5 rounded-md transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 outline-none`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (hasWriteAccess) {
+                    setIsMenuOpen(!isMenuOpen);
+                  }
+                }}
+              >
+                <MoreHorizontal className="w-5 h-5" />
+              </button>
 
-            {isMenuOpen && (
-              <div className="absolute right-0 bottom-full mb-1 w-32 bg-white rounded-md shadow-lg border border-gray-200 z-50 py-1 text-left origin-bottom-right">
-                <button
-                  className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 outline-none"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setIsMenuOpen(false);
-                    setIsEditModalOpen(true);
-                  }}
-                >
-                  <Edit2 className="w-3.5 h-3.5" /> Edit
-                </button>
-                <button
-                  className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleDelete();
-                  }}
-                  disabled={isDeleting}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />{" "}
-                  {isDeleting ? "Deleting..." : "Delete"}
-                </button>
-              </div>
-            )}
-          </div>
+              {isMenuOpen && (
+                <div className="absolute right-0 bottom-full mb-1 w-32 bg-white rounded-md shadow-lg border border-gray-200 z-50 py-1 text-left origin-bottom-right">
+                  <button
+                    className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 outline-none"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsMenuOpen(false);
+                      setIsEditModalOpen(true);
+                    }}
+                  >
+                    <Edit2 className="w-3.5 h-3.5" /> Edit
+                  </button>
+                  <button
+                    className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleDelete();
+                    }}
+                    disabled={isDeleting}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />{" "}
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <span className="p-1 px-2 bg-gray-100 text-sm rounded-md">Read-only</span>
+          )}
         </div>
       </Card>
 

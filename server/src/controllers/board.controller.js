@@ -1,5 +1,6 @@
 import { Board } from "../models/board.model.js";
 import { Workspace } from "../models/workspace.model.js";
+import mongoose from "mongoose";
 
 const createBoard = async (req, res) => {
     try {
@@ -15,8 +16,16 @@ const createBoard = async (req, res) => {
         }
 
         // Check if user is a member of the workspace
-        if (!workspace.members.includes(req.user._id)) {
+        if (!workspace.members.some(member => member.toString() === req.user._id.toString())) {
             return res.status(403).json({ message: "You are not a member of this workspace" });
+        }
+
+        // Enforce board tier limits
+        if (req.user.tier === 'Free') {
+            const boardCount = await Board.countDocuments({ workspaceId });
+            if (boardCount >= 3) {
+                return res.status(403).json({ message: "Free tier users can only create 3 boards per workspace." });
+            }
         }
 
         // Process incoming members
@@ -31,7 +40,7 @@ const createBoard = async (req, res) => {
                         role: m.role || "read"
                     });
 
-                    if (!workspace.members.includes(m.userId)) {
+                    if (!workspace.members.some(member => member.toString() === m.userId.toString())) {
                         workspace.members.push(m.userId);
                         isWorkspaceUpdated = true;
                     }
@@ -71,20 +80,56 @@ const createBoard = async (req, res) => {
 const getBoards = async (req, res) => {
     try {
         const { workspaceId } = req.params;
+        const userId = new mongoose.Types.ObjectId(req.user._id);
 
         const workspace = await Workspace.findById(workspaceId);
         if (!workspace) {
             return res.status(404).json({ message: "Workspace not found" });
         }
 
-        if (!workspace.members.includes(req.user._id)) {
+        if (!workspace.members.some(member => member.toString() === userId.toString())) {
             return res.status(403).json({ message: "You are not a member of this workspace" });
         }
 
-        const boards = await Board.find({
-            workspaceId,
-            'members.userId': req.user._id
-        }).populate('members.userId', 'fullName username avatar');
+        const boards = await Board.aggregate([
+            {
+                $match: {
+                    workspaceId: new mongoose.Types.ObjectId(workspaceId),
+                    'members.userId': userId
+                }
+            },
+            {
+                $addFields: {
+                    userRole: {
+                        $cond: {
+                            if: { $eq: ["$createdBy", userId] },
+                            then: "owner",
+                            else: {
+                                $let: {
+                                    vars: {
+                                        matchedMember: {
+                                            $arrayElemAt: [
+                                                {
+                                                    $filter: {
+                                                        input: "$members",
+                                                        as: "m",
+                                                        cond: { $eq: ["$$m.userId", userId] }
+                                                    }
+                                                },
+                                                0
+                                            ]
+                                        }
+                                    },
+                                    in: "$$matchedMember.role"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        ]);
+
+        await Board.populate(boards, { path: 'members.userId', select: 'fullName username avatar' });
 
         return res.status(200).json({
             message: "Boards fetched successfully",
@@ -99,16 +144,51 @@ const getBoardById = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const board = await Board.findById(id).populate('members.userId', 'fullName username avatar');
+        const boards = await Board.aggregate([
+            { $match: { _id: new mongoose.Types.ObjectId(id) } },
+            {
+                $addFields: {
+                    userRole: {
+                        $cond: {
+                            if: { $eq: ["$createdBy", req.user._id] },
+                            then: "owner",
+                            else: {
+                                $let: {
+                                    vars: {
+                                        matchedMember: {
+                                            $arrayElemAt: [
+                                                {
+                                                    $filter: {
+                                                        input: "$members",
+                                                        as: "m",
+                                                        cond: { $eq: ["$$m.userId", req.user._id] }
+                                                    }
+                                                },
+                                                0
+                                            ]
+                                        }
+                                    },
+                                    in: "$$matchedMember.role"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        ]);
 
-        if (!board) {
+        if (boards.length === 0) {
             return res.status(404).json({ message: "Board not found" });
         }
 
-        const isMember = board.members.some(member => member.userId._id.toString() === req.user._id.toString());
+        const board = boards[0];
+
+        const isMember = board.members.some(member => member.userId.toString() === req.user._id.toString());
         if (!isMember) {
             return res.status(403).json({ message: "You don't have access to this board" });
         }
+
+        await Board.populate(board, { path: 'members.userId', select: 'fullName username avatar' });
 
         return res.status(200).json({
             message: "Board fetched successfully",
@@ -136,6 +216,8 @@ const updateBoard = async (req, res) => {
             return res.status(403).json({ message: "You don't have write permission for this board" });
         }
 
+        const isOwner = req.user._id.toString() === board.createdBy.toString();
+
         board.name = name || board.name;
         board.description = description !== undefined ? description : board.description;
 
@@ -144,19 +226,50 @@ const updateBoard = async (req, res) => {
             let isWorkspaceUpdated = false;
             let boardMembers = [];
 
-            members.forEach(m => {
-                if (m.userId) {
-                    boardMembers.push({
-                        userId: m.userId,
-                        role: m.role || "read"
-                    });
+            if (!isOwner) {
+                // Non-owners can edit anyone EXCEPT themselves and the owner.
+                members.forEach(m => {
+                    if (m.userId) {
+                        const mIdStr = m.userId.toString();
+                        if (mIdStr === req.user._id.toString()) {
+                            // Preserve self permission
+                            const originalSelf = board.members.find(om => om.userId.toString() === mIdStr);
+                            if (originalSelf) m.role = originalSelf.role;
+                        } else if (mIdStr === board.createdBy.toString()) {
+                            // Preserve owner permission
+                            m.role = "write";
+                        }
 
-                    if (workspace && !workspace.members.includes(m.userId)) {
-                        workspace.members.push(m.userId);
-                        isWorkspaceUpdated = true;
+                        boardMembers.push({ userId: m.userId, role: m.role || "read" });
+
+                        if (workspace && !workspace.members.some(wMember => wMember.toString() === mIdStr)) {
+                            workspace.members.push(m.userId);
+                            isWorkspaceUpdated = true;
+                        }
                     }
+                });
+
+                // Ensure self is not completely deleted
+                const selfExists = boardMembers.find(m => m.userId.toString() === req.user._id.toString());
+                if (!selfExists) {
+                    const originalSelf = board.members.find(om => om.userId.toString() === req.user._id.toString());
+                    if (originalSelf) boardMembers.push({ userId: originalSelf.userId, role: originalSelf.role });
                 }
-            });
+            } else {
+                members.forEach(m => {
+                    if (m.userId) {
+                        boardMembers.push({
+                            userId: m.userId,
+                            role: m.role || "read"
+                        });
+
+                        if (workspace && !workspace.members.some(wMember => wMember.toString() === m.userId.toString())) {
+                            workspace.members.push(m.userId);
+                            isWorkspaceUpdated = true;
+                        }
+                    }
+                });
+            }
 
             const creatorExists = boardMembers.find(m => m.userId.toString() === board.createdBy.toString());
             if (!creatorExists) {

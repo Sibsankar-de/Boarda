@@ -7,6 +7,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { updateBoard, searchUsers } from "../lib/api";
 import { Search, X } from "lucide-react";
+import { useAuthStore } from "../store/auth-store";
 
 const boardSchema = z.object({
   name: z.string().min(1, "Board name is required"),
@@ -34,6 +35,8 @@ export function EditBoardModal({
   const [isSearching, setIsSearching] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<any[]>([]);
   const searchRef = useRef<HTMLDivElement>(null);
+
+  const { user: currentUser } = useAuthStore();
 
   const {
     register,
@@ -224,7 +227,7 @@ export function EditBoardModal({
 
             {/* Selected Users List */}
             {selectedUsers.length > 0 && (
-              <div className="max-h-[160px] overflow-y-auto space-y-2 border border-gray-100 p-2 rounded-md mt-3">
+              <div className="max-h-40 overflow-y-auto space-y-2 border border-gray-100 p-2 rounded-md mt-3">
                 {selectedUsers.map((user) => (
                   <div
                     key={user._id}
@@ -252,23 +255,36 @@ export function EditBoardModal({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <select
-                        className="text-xs bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
-                        value={user.role}
-                        onChange={(e) =>
-                          handleRoleChange(user._id, e.target.value)
-                        }
-                      >
-                        <option value="read">Read</option>
-                        <option value="write">Write</option>
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveUser(user._id)}
-                        className="text-gray-400 hover:text-red-500 p-1 rounded-md hover:bg-red-50 transition-colors"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                      {user._id ===
+                      (board?.createdBy?._id || board?.createdBy) ? (
+                        <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                          Owner
+                        </span>
+                      ) : user._id === currentUser?.id ? (
+                        <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded capitalize">
+                          {user.role} (You)
+                        </span>
+                      ) : (
+                        <>
+                          <select
+                            className="text-xs bg-white border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                            value={user.role}
+                            onChange={(e) =>
+                              handleRoleChange(user._id, e.target.value)
+                            }
+                          >
+                            <option value="read">Read</option>
+                            <option value="write">Write</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveUser(user._id)}
+                            className="text-gray-400 hover:text-red-500 p-1 rounded-md hover:bg-red-50 transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}

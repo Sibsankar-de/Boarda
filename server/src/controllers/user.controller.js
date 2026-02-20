@@ -268,10 +268,12 @@ const searchUsers = asyncHandler(async (req, res) => {
         return res.status(200).json({ users: [] });
     }
 
+    const escapedQuery = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
     const users = await User.find({
         $or: [
-            { username: { $regex: q, $options: 'i' } },
-            { fullName: { $regex: q, $options: 'i' } }
+            { username: { $regex: escapedQuery, $options: 'i' } },
+            { fullName: { $regex: escapedQuery, $options: 'i' } }
         ]
     })
         .select('fullName username avatar email')
