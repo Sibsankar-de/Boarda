@@ -85,7 +85,7 @@ const WorkspaceList = () => {
         </div>
 
         <div className="mt-20 text-center text-[12px] font-medium text-gray-400">
-          © 2023 Boardly Inc. All rights reserved.
+          © {new Date().getFullYear()} Boarda. All rights reserved.
         </div>
       </div>
 
